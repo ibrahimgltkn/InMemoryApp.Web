@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using InMemoryApp.Web.Models;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace InMemoryApp.Web.Controllers
@@ -8,40 +9,43 @@ namespace InMemoryApp.Web.Controllers
         private readonly IMemoryCache _memoryCache;
         public ProductController(IMemoryCache memoryCache)
         {
-           _memoryCache = memoryCache;
+            _memoryCache = memoryCache;
         }
 
         public IActionResult Index()
         {
-            // 1. yol  zaman value'lu cache değeri yoksa set ediliyor.
-            if(String.IsNullOrEmpty(_memoryCache.Get<string>("zaman")))
+            MemoryCacheEntryOptions options = new MemoryCacheEntryOptions();
+
+            options.AbsoluteExpiration = DateTime.Now.AddSeconds(10);
+            options.Priority = CacheItemPriority.High;
+
+            options.RegisterPostEvictionCallback((key, value, reason, state) =>
             {
-                _memoryCache.Set<string>("zaman", DateTime.Now.ToString());
-            }
+                _memoryCache.Set("callback", $"{key}->{value} => sebep: {reason}");
+            });
 
-            // 2. yol  zaman value'lu değerine göre bool tipi dönüyor ve zamancache isimli değişkene değer varsa atanıyor.
-            if (!_memoryCache.TryGetValue("zaman", out string zamancache))
+            _memoryCache.Set<string>("zaman", DateTime.Now.ToString(), options);
+
+            Product product = new Product
             {
-                _memoryCache.Set<string>("zaman", DateTime.Now.ToString());
-            }
-
-
+                Id =1,
+                Name = "Saat",
+                Price = 100,
+            };
+            _memoryCache.Set<Product>("product:1", product);
 
             return View();
         }
 
         public IActionResult Show()
         {
-            _memoryCache.Remove("zaman"); // memoryden data silinir.
+            _memoryCache.TryGetValue("zaman", out string zamancache);
+            _memoryCache.TryGetValue("callback", out string callback);
 
-            //İlgili değer varsa getirir yoksa oluşturur.
-            //function almasının bir sebebide key attributeleri ekleyebiliriz.
-            _memoryCache.GetOrCreate<string>("zaman", entry =>
-            {
-                return DateTime.Now.ToString();
-            });
+            ViewBag.zaman = zamancache;
+            ViewBag.callback = callback;
+            ViewBag.product = _memoryCache.Get<Product>("product:1");
 
-            ViewBag.zaman = _memoryCache.Get<string>("zaman");
             return View();
         }
     }
